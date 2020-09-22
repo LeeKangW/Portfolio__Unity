@@ -142,13 +142,16 @@ public class Player : CharacterParents
         {
             if (interActionObjectScript || interActingCollisionObject)
             {
-                /** About InterAction Anims */
-                if (!bIsActiveInterActionButton)
+                if (interActingCollisionObject)
                 {
-                    anim.SetTrigger(charac_PBAnim.PressPushBack.ToString());
+                    /** About InterAction Anims */
+                    if (!bIsActiveInterActionButton)
+                    {
+                        anim.SetTrigger(charac_PBAnim.PressPushBack.ToString());
+                    }
+                    anim.SetBool(charac_PBAnim.PressInterActionKey.ToString(), bIsActiveInterActionButton);
                 }
                 bIsActiveInterActionButton = true;
-                anim.SetBool(charac_PBAnim.PressInterActionKey.ToString(), bIsActiveInterActionButton);
             }
             ActivateCollisionInterActing();
         }
@@ -189,15 +192,7 @@ public class Player : CharacterParents
         switch (fMoveInput)
         {
             case -1.0f:
-                if (!bIsActiveInterActionButton && originCollisionParent == null) // 상호작용 동작 시, 뒤로 돌기 막음.
-                {
-                    rigid.velocity = new Vector2(fMoveInput * speed, rigid.velocity.y);
-                    trans.localScale = new Vector3(-Mathf.Abs(trans.localScale.x), trans.localScale.y, trans.localScale.z);
-                }
-                else // 상호작용 시, 속도 조절
-                {
-                    rigid.velocity = new Vector2(fMoveInput * InterActionSpeed, rigid.velocity.y);
-                }
+                SetCharacterSpeedAndLocalScale(ref fMoveInput);
                 anim.SetInteger(charac_anim.ValueInput.ToString(), (int)fMoveInput);
                 break;
 
@@ -206,17 +201,35 @@ public class Player : CharacterParents
                 break;
 
             case 1.0f:
-                if (!bIsActiveInterActionButton && originCollisionParent == null) // 상호작용 동작 시, 뒤로 돌기 막음.
-                {
-                    rigid.velocity = new Vector2(fMoveInput * speed, rigid.velocity.y);
-                    trans.localScale = new Vector3(Mathf.Abs(trans.localScale.x), trans.localScale.y, trans.localScale.z);
-                }
-                else // 상호작용 시, 속도 조절
-                {
-                    rigid.velocity = new Vector2(fMoveInput * InterActionSpeed, rigid.velocity.y);
-                }
+                SetCharacterSpeedAndLocalScale(ref fMoveInput);
                 anim.SetInteger(charac_anim.ValueInput.ToString(), (int)fMoveInput);
                 break;
+        }
+    }
+
+    /// <summary>
+    /// MovementSystem 함수에서 case문 안에 사용
+    /// </summary>
+    /// <param name="localScale"></param>
+    private void SetCharacterSpeedAndLocalScale(ref float localScale)
+    {
+        if (bIsActiveInterActionButton) // 상호작용 키 클릭 시
+        {
+            if (interActingCollisionObject) // 상호작용 오브젝트가 있을 때
+            {
+                rigid.velocity = new Vector2(fMoveInput * InterActionSpeed, rigid.velocity.y);
+                trans.localScale = new Vector3(Mathf.Abs(trans.localScale.x), trans.localScale.y, trans.localScale.z);
+            }
+            else // 상호작용 오브젝트가 없을 때
+            {
+                rigid.velocity = new Vector2(fMoveInput * speed, rigid.velocity.y);
+                trans.localScale = new Vector3(localScale * Mathf.Abs(trans.localScale.x), trans.localScale.y, trans.localScale.z);
+            }
+        }
+        else // 상호작용 키 사용하지 않을 때
+        {
+            rigid.velocity = new Vector2(fMoveInput * speed, rigid.velocity.y);
+            trans.localScale = new Vector3(localScale * Mathf.Abs(trans.localScale.x), trans.localScale.y, trans.localScale.z);
         }
     }
 
@@ -224,7 +237,7 @@ public class Player : CharacterParents
     /// 플레이어의 캐릭터 움직임 권한을 정함.
     /// </summary>
     /// <param name="rhs"> 권한 설정 </param>
-    public void UserCanPlayed(ref charac_state rhs)
+    public void SetUserState(charac_state rhs)
     {
         state = rhs;
     }
@@ -383,11 +396,15 @@ public class Player : CharacterParents
     {
         if (bInterActing && !bIsFalling && interActingCollisionObject)
         {
+            /** 상호작용 상태로 변경 */
+            SetUserState(charac_state.InterActing);
+
             /** 상호작용 오브젝트의 부모가 없을 때를 대비한 예외 처리 */
             if (originCollisionParent == null)
             {
                 originCollisionParent = interActingCollisionObject.parent;
             }
+
             interActingCollisionObject.SetParent(interActionPoint);
         }
     }
@@ -399,6 +416,9 @@ public class Player : CharacterParents
     {
         if (interActingCollisionObject)
         {
+            /** 플레이 상태로 변경 */
+            SetUserState(charac_state.CanPlayed);
+
             /** 상호작용 오브젝트의 부모가 없을 때를 대비한 예외 처리 */
             if (originCollisionParent)
             {
