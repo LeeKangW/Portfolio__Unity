@@ -1,8 +1,10 @@
-﻿using UnityEngine;
-using charac_anim = enum_Character.Anims;
-using charac_state = enum_Character.States;
+﻿using System.Collections;
+using UnityEngine;
+using charac_anim = ENUM_Character.Anims;
+using charac_PBAnim = ENUM_Character.PushBackAnims;
+using charac_state = ENUM_Character.States;
 
-public class Player : Character
+public class Player : CharacterParents
 {
     /** 상호작용 시, 상호작용되어진 오브젝트가 캐릭터에 자식으로 붙는 위치 */
 
@@ -66,18 +68,36 @@ public class Player : Character
 
     #region InterActionSystem Field
 
-    /** 상호작용된 오브젝트의 원래 부모 값을 가짐( 상호작용을 끝낼 때, 오브젝트를 원래 부모에게 돌려주기 위해 사용 )*/
-    private Transform originParent = null;
-    /** 상호작용된 오브젝트를 저장 */
-    private Transform interActingObject = null;
+    /**
+    * 콜리전 상호작용 시(밀고 당기기), 속도 조절
+    * @Tips : 일반 속도보다 낮출 예정   
+    * */
+
+    [Header("InterActions")]
+    [Range(0.1f, 10.0f)]
+    [SerializeField] private float InterActionSpeed = 1.0f;
+
+    /** Collision으로 상호작용된 오브젝트의 원래 부모 값을 가짐( 상호작용을 끝낼 때, 오브젝트를 원래 부모에게 돌려주기 위해 사용 )*/
+    private Transform originCollisionParent = null;
+    /** Collision으로 상호작용된 오브젝트를 저장 */
+    private Transform interActingCollisionObject = null;
+    /** Trigger로 상호작용된 오브젝트의 스크립트를 저장 */
+    private InterActionObjectsParent interActionObjectScript = null;
+
+    private WaitUntil interActingWaitUntill = null;
+
+    /** 코루틴 실행 중, StopCoroutine이 호출 될 경우, 작업이 멈추게 되는 것을 방지하기 위해 사용 */
+    private bool startCoroutine = false;
+
+    private Coroutine interActingCoroutine = null;
 
     /** 상호작용 중인지 체크
      * True : 상호작용 오브젝트에 접촉
      * False : 상호작용 오브젝트에서 떨어짐
      */
-    private bool bCollisionInterActing = false;
+    private bool bInterActing = false;
 
-    /** Collision에 닿고 난 후 상호작용을 했는지 확인 용도 
+    /** Collision or Trigger에 닿고 난 후 상호작용 키를 눌렀는지 확인 용도
      * True -> 상호작용을 시도함.
      * False -> 상호작용을 하지 않고, Collision Exit을 부름
      */
@@ -89,6 +109,8 @@ public class Player : Character
     {
         base.Awake();
         layerMask = (1 << LayerMask.NameToLayer("Ground")) + (1 << LayerMask.NameToLayer("InteractObject"));
+
+        interActingWaitUntill = new WaitUntil(() => interActionObjectScript && bIsActiveInterActionButton && !bIsFalling);
     }
 
     /// <summary>
@@ -118,14 +140,25 @@ public class Player : Character
 
         if (Input.GetMouseButton(0))
         {
-            // About Collision
-            bIsActiveInterActionButton = true;
-            ActivateInterActing();
+            if (interActionObjectScript || interActingCollisionObject)
+            {
+                /** About InterAction Anims */
+                if (!bIsActiveInterActionButton)
+                {
+                    anim.SetTrigger(charac_PBAnim.PressPushBack.ToString());
+                }
+                bIsActiveInterActionButton = true;
+                anim.SetBool(charac_PBAnim.PressInterActionKey.ToString(), bIsActiveInterActionButton);
+            }
+            ActivateCollisionInterActing();
         }
         else if (Input.GetMouseButtonUp(0))
         {
             // About Collision
             IsCancelInterActing();
+
+            /** About InterAction Anims */
+            anim.SetBool(charac_PBAnim.PressInterActionKey.ToString(), bIsActiveInterActionButton);
         }
 
         #endregion interaction system ( Input )
@@ -153,43 +186,36 @@ public class Player : Character
     /// </summary>
     private void MovementSystem()
     {
-        rigid.velocity = new Vector2(fMoveInput * speed, rigid.velocity.y);
-
         switch (fMoveInput)
         {
             case -1.0f:
-                if (!bIsActiveInterActionButton && originParent == null) // 상호작용 동작 시, 뒤로 돌기 막음.
+                if (!bIsActiveInterActionButton && originCollisionParent == null) // 상호작용 동작 시, 뒤로 돌기 막음.
                 {
+                    rigid.velocity = new Vector2(fMoveInput * speed, rigid.velocity.y);
                     trans.localScale = new Vector3(-Mathf.Abs(trans.localScale.x), trans.localScale.y, trans.localScale.z);
-                    anim.SetBool(charac_anim.IsRunning.ToString(), true);
                 }
-                else // 상호작용 애니메이션 실행.
+                else // 상호작용 시, 속도 조절
                 {
-
+                    rigid.velocity = new Vector2(fMoveInput * InterActionSpeed, rigid.velocity.y);
                 }
+                anim.SetInteger(charac_anim.ValueInput.ToString(), (int)fMoveInput);
                 break;
 
             case 0.0f:
-                if (!bIsActiveInterActionButton && originParent == null) // 상호작용 동작 시, 뒤로 돌기 막음.
-                {
-                    anim.SetBool(charac_anim.IsRunning.ToString(), false);
-                }
-                else // 상호작용 애니메이션 실행.
-                {
-
-                }
+                anim.SetInteger(charac_anim.ValueInput.ToString(), (int)fMoveInput);
                 break;
 
             case 1.0f:
-                if (!bIsActiveInterActionButton && originParent == null) // 상호작용 동작 시, 뒤로 돌기 막음.
+                if (!bIsActiveInterActionButton && originCollisionParent == null) // 상호작용 동작 시, 뒤로 돌기 막음.
                 {
+                    rigid.velocity = new Vector2(fMoveInput * speed, rigid.velocity.y);
                     trans.localScale = new Vector3(Mathf.Abs(trans.localScale.x), trans.localScale.y, trans.localScale.z);
-                    anim.SetBool(charac_anim.IsRunning.ToString(), true);
                 }
-                else // 상호작용 애니메이션 실행.
+                else // 상호작용 시, 속도 조절
                 {
-
+                    rigid.velocity = new Vector2(fMoveInput * InterActionSpeed, rigid.velocity.y);
                 }
+                anim.SetInteger(charac_anim.ValueInput.ToString(), (int)fMoveInput);
                 break;
         }
     }
@@ -263,49 +289,139 @@ public class Player : Character
 
     #region InterAction Functions
 
-    private void OnCollisionEnter2D(Collision2D collision)
+    #region Trigger InterActing System Functions
+
+    private void OnTriggerEnter2D(Collider2D collision)
     {
-        if (collision.gameObject.CompareTag("InteractiveObject") && !bIsActiveInterActionButton)
+        if (collision.CompareTag("InteractiveObject") && !bIsActiveInterActionButton)
         {
-            bCollisionInterActing = true;
-            interActingObject = collision.gameObject.transform;
+            // 상호작용(트리거용) 오브젝트 안에 있는 함수 실행.
+            interActingCoroutine = StartCoroutine(ActivateTriggerInterActing());
+            interActionObjectScript = collision.gameObject.GetComponent<InterActionObjectsParent>();
         }
     }
-    private void OnCollisionExit2D(Collision2D collision)
+
+    private void OnTriggerExit2D(Collider2D collision)
     {
         if (collision.gameObject.CompareTag("InteractiveObject"))
         {
-            bCollisionInterActing = false;
-            if(!bIsActiveInterActionButton)
-                interActingObject = null;
+            if (!startCoroutine)
+            {
+                if (interActingCoroutine != null)
+                    StopCoroutine(interActingCoroutine);
+
+                interActionObjectScript = null;
+                interActingCoroutine = null;
+            }
         }
     }
 
     /// <summary>
-    /// 상호작용 시, 상호작용 된 객체를 캐릭터 자식에 붙임.
+    /// Trigger로 작동하는 오브젝트 내부 로직을 실행
     /// </summary>
-    private void ActivateInterActing()
+    private IEnumerator ActivateTriggerInterActing()
     {
-        if (bCollisionInterActing && interActingObject)
+        yield return interActingWaitUntill;
+
+        startCoroutine = true;
+
+        /** 상호작용 오브젝트 내에 구현된 ActivateSystem 함수 실행 */
+        interActionObjectScript.ActivateSystemWithTrigger();
+
+        /** 코루틴 종료로 다시 초기화 */
+        interActionObjectScript = null;
+        startCoroutine = false;
+    }
+
+    #endregion Trigger InterActing System Functions
+
+    #region Collision InterActing System Functions
+
+    private bool IsCharacterStandOnCollider(Transform trans)
+    {
+        Vector2 charVec = this.gameObject.transform.position;
+        Vector2 ColliderVec = trans.position;
+
+        Vector2 vector2 = charVec - ColliderVec;
+
+        float degree = Mathf.Atan2(vector2.y, vector2.x) * Mathf.Rad2Deg;
+
+        /** degree 가 양수면 위에 서있고, 음수면 동일선상에 있음. */
+
+        if (degree >= 0.0f)
+            return true;
+
+        return false;
+    }
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("InteractiveObject") && !bIsActiveInterActionButton)
         {
-            originParent = interActingObject.parent.transform;
-            interActingObject.parent = interActionPoint;
+            /** 캐릭터가 콜라이더 위에 있으면 상호작용 불가 */
+            if (!IsCharacterStandOnCollider(collision.gameObject.transform))
+            {
+                bInterActing = true;
+                interActingCollisionObject = collision.gameObject.transform;
+            }
         }
     }
+
+    private void OnCollisionExit2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("InteractiveObject"))
+        {
+            bInterActing = false;
+            if (!bIsActiveInterActionButton)
+                interActingCollisionObject = null;
+        }
+    }
+
+    /// <summary>
+    /// 콜리전 상호작용 시, 상호작용 된 객체를 캐릭터 자식에 붙임.
+    /// </summary>
+    private void ActivateCollisionInterActing()
+    {
+        if (bInterActing && !bIsFalling && interActingCollisionObject)
+        {
+            /** 상호작용 오브젝트의 부모가 없을 때를 대비한 예외 처리 */
+            if (originCollisionParent == null)
+            {
+                originCollisionParent = interActingCollisionObject.parent;
+            }
+            interActingCollisionObject.SetParent(interActionPoint);
+        }
+    }
+
     /// <summary>
     /// 상호작용을 중지 시, 상호작용된 객체를 캐릭터 자식에서 제외시킴.
     /// </summary>
     private void IsCancelInterActing()
     {
-        if (originParent)
+        if (interActingCollisionObject)
         {
-            interActingObject.parent = originParent;
-
-            originParent = null;
-            interActingObject = null;
+            /** 상호작용 오브젝트의 부모가 없을 때를 대비한 예외 처리 */
+            if (originCollisionParent)
+            {
+                if (originCollisionParent == interActionPoint) // 만약 캐릭터에 세팅되어 있는 오브젝트와 같다면...
+                {
+                    interActingCollisionObject.SetParent(null);
+                }
+                else
+                {
+                    interActingCollisionObject.SetParent(originCollisionParent);
+                }
+            }
+            else
+            {
+                interActingCollisionObject.SetParent(null);
+            }
+            interActingCollisionObject = null;
+            originCollisionParent = null;
         }
         bIsActiveInterActionButton = false;
     }
+
+    #endregion Collision InterActing System Functions
 
     #endregion InterAction Functions
 

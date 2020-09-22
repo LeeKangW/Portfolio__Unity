@@ -1,4 +1,4 @@
-﻿namespace enum_Character
+﻿namespace ENUM_Character
 {
     /// <summary>
     /// @ CanPlayed : 유저가 플레이 가능
@@ -7,5 +7,12 @@
     /// </summary>
     public enum States { CanPlayed,CanNotPlayed, InterActing };
     public enum Kinds {None, Player, NPC };
-    public enum Anims { IsRunning,IsJumping, PressJump, PressRunningJump, SwitchOn };
+    public enum Anims { ValueInput, IsJumping, PressJump, PressRunningJump, SwitchOn };
+
+    public enum PushBackAnims { PressPushBack, PushBackInput, PressInterActionKey };
+}
+
+namespace ENUM_VCam
+{
+    public enum WhatSystem { WS_ZoomIn, WS_ZoomOut , WS_TimeLine, Default};
 }
