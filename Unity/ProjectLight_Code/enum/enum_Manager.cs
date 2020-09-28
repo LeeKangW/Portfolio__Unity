@@ -10,6 +10,8 @@
     public enum Anims { ValueInput, IsJumping, PressJump, PressRunningJump, SwitchOn };
 
     public enum PushBackAnims { PressPushBack, PushBackInput, PressInterActionKey };
+
+    public enum InterActionPos { Left, Right, CantInterAction, Default };
 }
 
 namespace ENUM_VCam

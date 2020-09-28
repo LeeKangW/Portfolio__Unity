@@ -3,6 +3,7 @@ using UnityEngine;
 using charac_anim = ENUM_Character.Anims;
 using charac_PBAnim = ENUM_Character.PushBackAnims;
 using charac_state = ENUM_Character.States;
+using charac_interpos = ENUM_Character.InterActionPos;
 
 public class Player : CharacterParents
 {
@@ -103,6 +104,8 @@ public class Player : CharacterParents
      */
     private bool bIsActiveInterActionButton = false;
 
+    private charac_interpos interActionPos = charac_interpos.Default;
+
     #endregion InterActionSystem Field
 
     protected override void Awake()
@@ -193,7 +196,14 @@ public class Player : CharacterParents
         {
             case -1.0f:
                 SetCharacterSpeedAndLocalScale(ref fMoveInput);
-                anim.SetInteger(charac_anim.ValueInput.ToString(), (int)fMoveInput);
+                if (interActionPos == charac_interpos.Left)
+                {
+                    anim.SetInteger(charac_anim.ValueInput.ToString(), -1 * (int)fMoveInput);
+                }
+                else
+                {
+                    anim.SetInteger(charac_anim.ValueInput.ToString(), (int)fMoveInput);
+                }
                 break;
 
             case 0.0f:
@@ -202,7 +212,14 @@ public class Player : CharacterParents
 
             case 1.0f:
                 SetCharacterSpeedAndLocalScale(ref fMoveInput);
-                anim.SetInteger(charac_anim.ValueInput.ToString(), (int)fMoveInput);
+                if (interActionPos == charac_interpos.Left)
+                {
+                    anim.SetInteger(charac_anim.ValueInput.ToString(), -1 * (int)fMoveInput);
+                }
+                else
+                {
+                    anim.SetInteger(charac_anim.ValueInput.ToString(), (int)fMoveInput);
+                }
                 break;
         }
     }
@@ -218,7 +235,7 @@ public class Player : CharacterParents
             if (interActingCollisionObject) // 상호작용 오브젝트가 있을 때
             {
                 rigid.velocity = new Vector2(fMoveInput * InterActionSpeed, rigid.velocity.y);
-                trans.localScale = new Vector3(Mathf.Abs(trans.localScale.x), trans.localScale.y, trans.localScale.z);
+                trans.localScale = new Vector3(trans.localScale.x, trans.localScale.y, trans.localScale.z);
             }
             else // 상호작용 오브젝트가 없을 때
             {
@@ -350,7 +367,7 @@ public class Player : CharacterParents
 
     #region Collision InterActing System Functions
 
-    private bool IsCharacterStandOnCollider(Transform trans)
+    private charac_interpos IsCharacterStandOnCollider(Transform trans)
     {
         Vector2 charVec = this.gameObject.transform.position;
         Vector2 ColliderVec = trans.position;
@@ -360,18 +377,26 @@ public class Player : CharacterParents
         float degree = Mathf.Atan2(vector2.y, vector2.x) * Mathf.Rad2Deg;
 
         /** degree 가 양수면 위에 서있고, 음수면 동일선상에 있음. */
-
-        if (degree >= 0.0f)
-            return true;
-
-        return false;
+        if (degree < 0.0f)
+        {
+            if (degree > -90.0f)
+            {
+                return charac_interpos.Left;
+            }
+            if (degree < -90.0f)
+            {
+                return charac_interpos.Right;
+            }
+        }
+        return charac_interpos.CantInterAction;
     }
     private void OnCollisionEnter2D(Collision2D collision)
     {
         if (collision.gameObject.CompareTag("InteractiveObject") && !bIsActiveInterActionButton)
         {
+            interActionPos = IsCharacterStandOnCollider(collision.gameObject.transform);
             /** 캐릭터가 콜라이더 위에 있으면 상호작용 불가 */
-            if (!IsCharacterStandOnCollider(collision.gameObject.transform))
+            if (interActionPos != charac_interpos.CantInterAction)
             {
                 bInterActing = true;
                 interActingCollisionObject = collision.gameObject.transform;
