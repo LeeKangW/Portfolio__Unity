@@ -11,7 +11,7 @@ namespace SingleTon
         [Header("Virtual Cam")]
         /** 가상 카메라 */
         [Tooltip("Original VCam")]
-        [SerializeField] private CinemachineVirtualCamera vCam = null;
+        [SerializeField] public CinemachineVirtualCamera vCam = null;
         [SerializeField] private PlayableDirector playableDirector = null;
 
         [Header("Debuging Field")]

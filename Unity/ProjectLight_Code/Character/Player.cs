@@ -75,20 +75,22 @@ public class Player : CharacterParents
     * */
 
     [Header("InterActions")]
-    [Range(0.1f, 10.0f)]
-    [SerializeField] private float InterActionSpeed = 1.0f;
+    [SerializeField] private float InterActionSpeed = 2.4f;
 
     /** Collision으로 상호작용된 오브젝트의 원래 부모 값을 가짐( 상호작용을 끝낼 때, 오브젝트를 원래 부모에게 돌려주기 위해 사용 )*/
     private Transform originCollisionParent = null;
     /** Collision으로 상호작용된 오브젝트를 저장 */
     private Transform interActingCollisionObject = null;
     /** Trigger로 상호작용된 오브젝트의 스크립트를 저장 */
-    private InterActionObjectsParent interActionObjectScript = null;
+    private InterActionObjectsWithTriggerParent interActionObjectScript = null;
 
     private WaitUntil interActingWaitUntill = null;
 
     /** 코루틴 실행 중, StopCoroutine이 호출 될 경우, 작업이 멈추게 되는 것을 방지하기 위해 사용 */
     private bool startCoroutine = false;
+
+    /** 상호작용 애니메이션 실행 중, 준비자세 들어갈 때, 이동을 방지 */
+    private bool bwaitInterActingAnim = false;
 
     private Coroutine interActingCoroutine = null;
 
@@ -230,6 +232,8 @@ public class Player : CharacterParents
     /// <param name="localScale"></param>
     private void SetCharacterSpeedAndLocalScale(ref float localScale)
     {
+        if (bwaitInterActingAnim) return;
+
         if (bIsActiveInterActionButton) // 상호작용 키 클릭 시
         {
             if (interActingCollisionObject) // 상호작용 오브젝트가 있을 때
@@ -327,7 +331,7 @@ public class Player : CharacterParents
         {
             // 상호작용(트리거용) 오브젝트 안에 있는 함수 실행.
             interActingCoroutine = StartCoroutine(ActivateTriggerInterActing());
-            interActionObjectScript = collision.gameObject.GetComponent<InterActionObjectsParent>();
+            interActionObjectScript = collision.gameObject.GetComponent<InterActionObjectsWithTriggerParent>();
         }
     }
 
@@ -400,6 +404,9 @@ public class Player : CharacterParents
             {
                 bInterActing = true;
                 interActingCollisionObject = collision.gameObject.transform;
+
+                InterActionSpeed =  collision.gameObject.GetComponent<InterActionObjectsWithCollision>().MoveSpeed;
+                GetComponent<Animator>().SetFloat("InterActionSpeed", collision.gameObject.GetComponent<InterActionObjectsWithCollision>().AnimSpeed);
             }
         }
     }
@@ -466,6 +473,24 @@ public class Player : CharacterParents
         bIsActiveInterActionButton = false;
     }
 
+    /// <summary>
+    /// 상호작용 ( 밀기,당기기 ) 애님 시, 준비자세가 끝나고
+    /// 실제 애니메이션이 나올 때까지 대기시켜주는 코드.
+    /// 
+    /// PushBack_Ready 애니메이션 안에 적용되어 있음.
+    /// </summary>
+    /// <param name="isWait"></param>
+    public void AE_SetWaitInterActionAnim(int isWait)
+    {
+        if (isWait == 1)
+        {
+            bwaitInterActingAnim = true;
+        }
+        else
+        {
+            bwaitInterActingAnim = false;
+        }
+    }
     #endregion Collision InterActing System Functions
 
     #endregion InterAction Functions
